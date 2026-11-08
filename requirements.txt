@@ -1,7 +1,5 @@
 pyrogram==2.0.106
-tgcrypto==1.2.5
 python-dotenv==1.0.1
-Pillow==10.2.0
+Pillow
 arabic-reshaper==3.0.0
 python-bidi==0.4.2
-ffmpeg-python
