@@ -1,5 +1,6 @@
 import os
 import logging
+import urllib.request  # لتحميل الخط العربي تلقائياً
 import arabic_reshaper
 from bidi.algorithm import get_display
 from PIL import Image, ImageDraw, ImageFont
@@ -15,6 +16,9 @@ from collections import defaultdict
 
 load_dotenv()
 
+# ==========================================
+# 1. الإعدادات الأساسية
+# ==========================================
 API_ID = int(os.getenv("API_ID", 0))
 API_HASH = os.getenv("API_HASH", "")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -26,17 +30,31 @@ app = Client("MemoryDesignerBot", api_id=API_ID, api_hash=API_HASH, bot_token=BO
 
 TEMP_DIR = "temp_images"
 os.makedirs(TEMP_DIR, exist_ok=True)
+
+# ==========================================
+# 2. تحميل الخط العربي تلقائياً (الحل السحري)
+# ==========================================
+FONT_PATH = "Cairo-Regular.ttf"
+if not os.path.exists(FONT_PATH):
+    print("⏳ جاري تحميل الخط العربي...")
+    try:
+        # رابط مباشر لملف الخط من مستودع جوجل الرسمي
+        font_url = "https://github.com/google/fonts/raw/main/ofl/cairo/Cairo%5Bslnt%2Cwght%5D.ttf"
+        urllib.request.urlretrieve(font_url, FONT_PATH)
+        print("✅ تم تحميل الخط بنجاح!")
+    except Exception as e:
+        print(f"❌ فشل تحميل الخط: {e}")
+
+# ==========================================
+# 3. إدارة البيانات والحالات
+# ==========================================
 user_states = {}
 USERS_FILE = "users_data.json"
 CONFIG_FILE = "admin_config.json"
 
-# متغيرات المطور
 DEV_NAME = "المبرمج"
 DEV_USERNAME = ""
 
-# ==========================================
-# 1. إدارة البيانات والإحصائيات
-# ==========================================
 if os.path.exists(USERS_FILE):
     with open(USERS_FILE, "r", encoding="utf-8") as f:
         users_db = json.load(f)
@@ -89,10 +107,8 @@ class RateLimiter:
 rate_limiter = RateLimiter()
 
 # ==========================================
-# 2. دوال التصميم
+# 4. دوال التصميم
 # ==========================================
-FONT_PATH = "Cairo-Regular.ttf" 
-
 def wrap_text(text, font, max_width):
     reshaped_text = arabic_reshaper.reshape(text)
     bidi_text = get_display(reshaped_text)
@@ -145,7 +161,7 @@ def create_video_with_audio(image_path, audio_path, output_path):
     video.write_videofile(output_path, fps=1, codec="libx264", audio_codec="aac", logger=None)
 
 # ==========================================
-# 3. الأزرار والقوائم
+# 5. الأزرار والقوائم
 # ==========================================
 def get_back_keyboard():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 إلغاء والرجوع للقائمة الرئيسية", callback_data="back_to_start")]])
@@ -155,7 +171,6 @@ def get_main_keyboard(user_id):
         [InlineKeyboardButton("🎨 ابدأ التصميم الآن", callback_data="start_design")],
         [InlineKeyboardButton("📞 نداء للمطور", callback_data="call_dev")]
     ]
-    # زر المبرمج يعرض الاسم الحقيقي
     if DEV_USERNAME:
         kb.append([InlineKeyboardButton(f"👨‍💻 {DEV_NAME}", url=f"https://t.me/{DEV_USERNAME}")])
     
@@ -181,7 +196,7 @@ def get_channels_keyboard():
     return InlineKeyboardMarkup(kb)
 
 # ==========================================
-# 4. دالة التحقق من الاشتراك
+# 6. التحقق من الاشتراك
 # ==========================================
 async def check_subscription(client, user_id):
     channels = config_data.get("channels", [])
@@ -195,7 +210,7 @@ async def check_subscription(client, user_id):
     return True
 
 # ==========================================
-# 5. أوامر البوت والترحيب
+# 7. أوامر البوت والترحيب
 # ==========================================
 @app.on_message(filters.command("start") & filters.private)
 async def start_cmd(client, message):
@@ -207,7 +222,6 @@ async def start_cmd(client, message):
     if rate_limiter.is_banned(user_id):
         return await message.reply_text("**🚫 أنت محظور مؤقتاً بسبب محاولات خاطئة.**")
 
-    # جلب اسم المطور ويوزره لأول مرة
     if DEV_USERNAME == "":
         try:
             dev_user = await client.get_users(OWNER_ID)
@@ -217,7 +231,6 @@ async def start_cmd(client, message):
             DEV_NAME = "المبرمج"
             DEV_USERNAME = str(OWNER_ID)
 
-    # إشعار دخول مستخدم جديد
     if str(user_id) not in users_db:
         users_db[str(user_id)] = {"name": message.from_user.first_name, "username": message.from_user.username}
         save_users()
@@ -228,7 +241,6 @@ async def start_cmd(client, message):
         try: await client.send_message(OWNER_ID, dev_text, reply_markup=kb)
         except: pass
 
-    # التحقق من الاشتراك الإجباري
     if not await check_subscription(client, user_id):
         channels = config_data.get("channels", [])
         kb = []
@@ -271,7 +283,7 @@ async def back_to_start(client, callback_query):
     await start_cmd(client, callback_query.message)
 
 # ==========================================
-# 6. لوحة التحكم (للمطور فقط)
+# 8. لوحة التحكم (للمطور فقط)
 # ==========================================
 @app.on_callback_query(filters.regex("^open_admin$"))
 async def open_admin(client, callback_query):
@@ -364,7 +376,7 @@ async def del_media(client, callback_query):
     await admin_media(client, callback_query)
 
 # ==========================================
-# 7. نداء المطور
+# 9. نداء المطور
 # ==========================================
 @app.on_callback_query(filters.regex("^call_dev$"))
 async def call_developer(client, callback_query):
@@ -397,7 +409,7 @@ async def call_developer(client, callback_query):
     except: pass
 
 # ==========================================
-# 8. مراحل التصميم
+# 10. مراحل التصميم
 # ==========================================
 @app.on_callback_query(filters.regex("^start_design$"))
 async def ask_for_photo(client, callback_query):
@@ -423,7 +435,6 @@ async def receive_text(client, message):
     
     state = user_states[user_id]["step"]
     
-    # معالجة إدخالات المطور
     if state == "admin_waiting_broadcast":
         del user_states[user_id]
         msg_status = await message.reply_text("**⏳ جاري الإذاعة...**")
@@ -448,7 +459,6 @@ async def receive_text(client, message):
             await message.reply_text(f"**❌ فشل الإضافة:** `{e}`", reply_markup=get_channels_keyboard())
         return
 
-    # معالجة النص للتصميم
     if state == "waiting_text":
         try: await message.delete()
         except: pass
@@ -518,6 +528,9 @@ async def receive_audio(client, message):
                 except: pass
         del user_states[user_id]
 
+# ==========================================
+# 11. التشغيل
+# ==========================================
 if __name__ == "__main__":
     print("🎬 Memory Designer Bot is running...")
     app.run()
